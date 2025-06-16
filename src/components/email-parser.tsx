@@ -13,7 +13,8 @@ import { DonationData, FormData } from "@/types/indes";
 
 export const EmailParser = () => {
   const [donationData, setDonationData] = useState<DonationData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [parseLoading, setParseLoading] = useState(false);
+  const [generateLoading, setGenerateLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -32,7 +33,7 @@ export const EmailParser = () => {
   const emailText = watch("emailText");
 
   const onSubmit = async (data: FormData) => {
-    setLoading(true);
+    setParseLoading(true);
     setError(null);
     setPdfUrl(null);
     setSuccess(false);
@@ -45,7 +46,38 @@ export const EmailParser = () => {
       setError(err instanceof Error ? err.message : "Failed to parse email");
       setDonationData(null);
     } finally {
-      setLoading(false);
+      setParseLoading(false);
+    }
+  };
+
+  const handleGeneratePdf = async () => {
+    if (!donationData) return;
+
+    setGenerateLoading(true);
+    setError(null);
+    setPdfUrl(null);
+
+    try {
+      const response = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(donationData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to generate PDF");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate PDF");
+    } finally {
+      setGenerateLoading(false);
     }
   };
 
@@ -79,8 +111,8 @@ export const EmailParser = () => {
         </div>
 
         <div className="flex flex-wrap gap-4 mb-6">
-          <Button type="submit" disabled={loading || !emailText?.trim()}>
-            {loading ? (
+          <Button type="submit" disabled={parseLoading || !emailText?.trim()}>
+            {parseLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Processing...
@@ -91,8 +123,13 @@ export const EmailParser = () => {
           </Button>
 
           {donationData && (
-            <Button type="button" disabled={loading} variant="outline">
-              {loading ? (
+            <Button
+              type="button"
+              onClick={handleGeneratePdf}
+              disabled={generateLoading}
+              variant="outline"
+            >
+              {generateLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Generating...
